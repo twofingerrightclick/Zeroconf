@@ -37,10 +37,10 @@ namespace ZeroconfTest.NetFx
             //Action<IZeroconfRecord> onMessage = record => Console.WriteLogLine("On Message: {0}", record);
 
 
-            var domains = await ZeroconfResolver.BrowseDomainsAsync();
+            //var domains = await ZeroconfResolver.BrowseDomainsAsync();
             
-            var responses = await ZeroconfResolver.ResolveAsync(domains.Select(g => g.Key));
-            // var responses = await ZeroconfResolver.ResolveAsync("_http._tcp.local.");
+           // var responses = await ZeroconfResolver.ResolveAsync(domains.Select(g => g.Key));
+            var responses = await ZeroconfResolver.ResolveAsync("notebookair-548453945869._smartenergy._tcp.site.");
             
             foreach (var resp in responses)
                 WriteLogLine(resp.ToString());
@@ -48,6 +48,10 @@ namespace ZeroconfTest.NetFx
 
         async void Browse_Click(object sender, RoutedEventArgs e)
         {
+            var search = "_smartenergy._tcp.site.";
+            Console.WriteLine(search);
+            var options= new BrowseDomainsOptions(search);
+         
             var responses = await ZeroconfResolver.BrowseDomainsAsync();
             
             foreach (var service in responses)

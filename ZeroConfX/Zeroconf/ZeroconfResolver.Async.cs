@@ -135,7 +135,7 @@ namespace Zeroconf
             if (scanTime == default(TimeSpan))
                 scanTime = TimeSpan.FromSeconds(2);
 
-            var options = new BrowseDomainsOptions()
+            var options = new BrowseDomainsOptions
             {
                 Retries = retries,
                 RetryDelay = TimeSpan.FromMilliseconds(retryDelayMilliseconds),

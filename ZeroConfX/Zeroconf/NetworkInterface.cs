@@ -17,9 +17,6 @@ namespace Zeroconf
 {
     class NetworkInterface : INetworkInterface
     {
-        //string _SiteLocalBroadcastAddress = "FF05:0:0:0:0:0:0:FB"; // site local ipv6
-
-        string _SiteLocalBroadcastAddress =   "FF02::FB";
         public async Task NetworkRequestAsync(byte[] requestBytes,
                                               TimeSpan scanTime,
                                               int retries,
@@ -65,25 +62,25 @@ namespace Zeroconf
             if (OperationalStatus.Up != adapter.OperationalStatus)
                 return; // this adapter is off or not connected
 
-            /*if (adapter.NetworkInterfaceType == NetworkInterfaceType.Loopback)
-                return; // strip out loopback addresses*/
+            if (adapter.NetworkInterfaceType == NetworkInterfaceType.Loopback)
+                return; // strip out loopback addresses
 
-            var p = adapter.GetIPProperties().GetIPv6Properties();
+            var p = adapter.GetIPProperties().GetIPv4Properties();
             if (null == p)
-                return; // IPv6 is not configured on this adapter
+                return; // IPv4 is not configured on this adapter
 
-            var ipv6Address = adapter.GetIPProperties().UnicastAddresses
-                                    .FirstOrDefault(ua => ua.Address.AddressFamily == AddressFamily.InterNetworkV6)?.Address;
+            var ipv4Address = adapter.GetIPProperties().UnicastAddresses
+                                    .FirstOrDefault(ua => ua.Address.AddressFamily == AddressFamily.InterNetwork)?.Address;
 
-            if (ipv6Address == null)
+            if (ipv4Address == null)
                 return; // could not find an IPv4 address for this adapter
 
             var ifaceIndex = p.Index;
 
-            Debug.WriteLine($"Scanning on iface {adapter.Name}, idx {ifaceIndex}, IP: {ipv6Address}");
+            Debug.WriteLine($"Scanning on iface {adapter.Name}, idx {ifaceIndex}, IP: {ipv4Address}");
 
 
-            using (var client = new UdpClient(AddressFamily.InterNetworkV6))
+            using (var client = new UdpClient())
             {
                 for (var i = 0; i < retries; i++)
                 {
@@ -93,12 +90,9 @@ namespace Zeroconf
 
                         if (socket.IsBound) continue;
 
-                        var interfaceIPNetworkOrder= (int)IPAddress.HostToNetworkOrder(ifaceIndex);
-                        var interfaceIP = IPAddress.NetworkToHostOrder((int)IPAddress.HostToNetworkOrder(ifaceIndex));
-
-                        socket.SetSocketOption(SocketOptionLevel.IPv6,
+                        socket.SetSocketOption(SocketOptionLevel.IP,
                                                      SocketOptionName.MulticastInterface,
-                                                     interfaceIP);
+                                                     IPAddress.HostToNetworkOrder(ifaceIndex));
 
 
 
@@ -112,20 +106,18 @@ namespace Zeroconf
                         client.ExclusiveAddressUse = false;
 
 
-                        var localEp = new IPEndPoint(IPAddress.IPv6Any, 5353);
-                        //var localEp = new IPEndPoint(IPAddress.Any, 5353);
+                        var localEp = new IPEndPoint(IPAddress.Any, 5353);
 
                         Debug.WriteLine($"Attempting to bind to {localEp} on adapter {adapter.Name}");
                         socket.Bind(localEp);
                         Debug.WriteLine($"Bound to {localEp}");
 
-                        //var multicastAddress = IPAddress.Parse("224.0.0.251");
-                        var multicastAddress = IPAddress.Parse(_SiteLocalBroadcastAddress);
-                        var multOpt = new IPv6MulticastOption(multicastAddress, ifaceIndex);
-                        socket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.AddMembership, multOpt);
+                        var multicastAddress = IPAddress.Parse("224.0.0.251");
+                        var multOpt = new MulticastOption(multicastAddress, ifaceIndex);
+                        socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.AddMembership, multOpt);
 
 
-                        Debug.WriteLine($"Bound to multicast address, {_SiteLocalBroadcastAddress}");
+                        Debug.WriteLine("Bound to multicast address");
 
 
                         // Start a receive loop
@@ -149,8 +141,7 @@ namespace Zeroconf
                                                    }
                                                }, cancellationToken);
 
-                        //var broadcastEp = new IPEndPoint(IPAddress.Parse("224.0.0.251"), 5353);
-                        var broadcastEp = new IPEndPoint(IPAddress.Parse(_SiteLocalBroadcastAddress), 5353);
+                        var broadcastEp = new IPEndPoint(IPAddress.Parse("224.0.0.251"), 5353);
 
                         Debug.WriteLine($"About to send on iface {adapter.Name}");
                         await client.SendAsync(requestBytes, requestBytes.Length, broadcastEp)
@@ -176,7 +167,7 @@ namespace Zeroconf
                     }
                     catch (Exception e)
                     {
-                        Debug.WriteLine($"Execption with network request, IP {ipv6Address}\n: {e}");
+                        Debug.WriteLine($"Execption with network request, IP {ipv4Address}\n: {e}");
                         if (i + 1 >= retries) // last one, pass underlying out
                         {
                             // Ensure all inner info is captured                            
@@ -197,8 +188,8 @@ namespace Zeroconf
                                       .Where(a => a.SupportsMulticast)
                                       .Where(a => a.OperationalStatus == OperationalStatus.Up)
                                       .Where(a => a.NetworkInterfaceType != NetworkInterfaceType.Loopback)
-                                      .Where(a => a.GetIPProperties().GetIPv6Properties() != null)
-                                      .Where(a => a.GetIPProperties().UnicastAddresses.Any(ua => ua.Address.AddressFamily == AddressFamily.InterNetworkV6))
+                                      .Where(a => a.GetIPProperties().GetIPv4Properties() != null)
+                                      .Where(a => a.GetIPProperties().UnicastAddresses.Any(ua => ua.Address.AddressFamily == AddressFamily.InterNetwork))
                                       .Select(inter => ListenForAnnouncementsAsync(inter, callback, cancellationToken)));
         }
 
@@ -206,22 +197,22 @@ namespace Zeroconf
         {
             return Task.Factory.StartNew(async () =>
             {
-                var ipv6Address = adapter.GetIPProperties().UnicastAddresses
-                                         .First(ua => ua.Address.AddressFamily == AddressFamily.InterNetworkV6)?.Address;
+                var ipv4Address = adapter.GetIPProperties().UnicastAddresses
+                                         .First(ua => ua.Address.AddressFamily == AddressFamily.InterNetwork)?.Address;
 
-                if (ipv6Address == null)
+                if (ipv4Address == null)
                     return;
 
-                var ifaceIndex = adapter.GetIPProperties().GetIPv6Properties()?.Index;
+                var ifaceIndex = adapter.GetIPProperties().GetIPv4Properties()?.Index;
                 if (ifaceIndex == null)
                     return;
 
-                Debug.WriteLine($"Scanning on iface {adapter.Name}, idx {ifaceIndex}, IP: {ipv6Address}");
+                Debug.WriteLine($"Scanning on iface {adapter.Name}, idx {ifaceIndex}, IP: {ipv4Address}");
 
-                using (var client = new UdpClient(AddressFamily.InterNetworkV6))
+                using (var client = new UdpClient())
                 {
                     var socket = client.Client;
-                    socket.SetSocketOption(SocketOptionLevel.IPv6,
+                    socket.SetSocketOption(SocketOptionLevel.IP,
                                            SocketOptionName.MulticastInterface,
                                            IPAddress.HostToNetworkOrder(ifaceIndex.Value));
 
@@ -231,13 +222,12 @@ namespace Zeroconf
                     client.ExclusiveAddressUse = false;
 
 
-                    var localEp = new IPEndPoint(IPAddress.IPv6Any, 5353);
+                    var localEp = new IPEndPoint(IPAddress.Any, 5353);
                     socket.Bind(localEp);
 
-                    //var multicastAddress = IPAddress.Parse("224.0.0.251");
-                    var multicastAddress = IPAddress.Parse(_SiteLocalBroadcastAddress);
-                    var multOpt = new IPv6MulticastOption(multicastAddress, ifaceIndex.Value);
-                    socket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.AddMembership, multOpt);
+                    var multicastAddress = IPAddress.Parse("224.0.0.251");
+                    var multOpt = new MulticastOption(multicastAddress, ifaceIndex.Value);
+                    socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.AddMembership, multOpt);
 
 
                     cancellationToken.Register((() =>
@@ -254,7 +244,7 @@ namespace Zeroconf
                                                  .ConfigureAwait(false);
                             try
                             {
-                                callback(new AdapterInformation(ipv6Address.ToString(), adapter.Name), packet.RemoteEndPoint.Address.ToString(), packet.Buffer);
+                                callback(new AdapterInformation(ipv4Address.ToString(), adapter.Name), packet.RemoteEndPoint.Address.ToString(), packet.Buffer);
                             }
                             catch (Exception ex)
                             {
@@ -268,7 +258,7 @@ namespace Zeroconf
                     }
 
 
-                    Debug.WriteLine($"Done listening for mDNS packets on {adapter.Name}, idx {ifaceIndex}, IP: {ipv6Address}.");
+                    Debug.WriteLine($"Done listening for mDNS packets on {adapter.Name}, idx {ifaceIndex}, IP: {ipv4Address}.");
 
                     cancellationToken.ThrowIfCancellationRequested();
                 }

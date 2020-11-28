@@ -55,7 +55,7 @@ namespace Zeroconf
 
     public class BrowseDomainsOptions : ZeroconfOptions
     {
-        public BrowseDomainsOptions(string protocol = "_services._dns-sd._udp.local.") : base(protocol)
+        public BrowseDomainsOptions() : base("_services._dns-sd._udp.local.")
         {
         }
     }
